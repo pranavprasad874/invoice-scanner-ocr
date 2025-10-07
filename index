@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Invoice Scanner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js'></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .api-key-section {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 10px;
+        }
+
+        .api-key-section h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .api-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .api-input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .api-input-group button {
+            padding: 12px 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        .api-input-group button:hover {
+            background: #218838;
+        }
+
+        .api-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .api-status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px solid #e9ecef;
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9fa;
+        }
+
+        .upload-area.dragover {
+            background: #e7e9fd;
+            border-color: #764ba2;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .upload-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .preview-container canvas {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .rotate-buttons {
+            margin-top: 10px;
+        }
+        
+        .rotate-buttons button {
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group input.error {
+            border-color: #dc3545;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .line-items-section, .export-options-section {
+            margin-top: 30px;
+            border-top: 2px solid #e9ecef;
+            padding-top: 20px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        table input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+
+        .btn-remove {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn-remove:hover {
+            background: #c82333;
+        }
+
+        .btn-add {
+            margin-top: 10px;
+            background: #667eea;
+        }
+
+        .btn-add:hover {
+            background: #5568d3;
+        }
+
+        .ocr-text-container {
+            margin-top: 20px;
+        }
+
+        .ocr-text-container textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: #f8f9fa;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .google-auth-status {
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .google-auth-status.signed-in {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .google-auth-status.signed-out {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+
+        .instructions {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 5px;
+        }
+
+        .instructions h4 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+        
+        /* Toast Notification Styles */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s, visibility 0.5s, transform 0.5s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -10px);
+        }
+
+        .toast.success {
+            background: #28a745;
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+        
+        .toast.warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧾 AI Invoice Scanner</h1>
+            <p>Upload or capture invoices for intelligent data extraction powered by Gemini</p>
+        </div>
+
+        <!-- API Key Setup Section -->
+        <div class="api-key-section">
+            <h3>🔑 Google Gemini API Key</h3>
+            <p>To run this app locally, you need a Gemini API key. <a href="https://aistudio.google.com/app/apikey" target="_blank">Get your free key from Google AI Studio.</a></p>
+            <div class="api-input-group">
+                <input type="password" id="geminiApiKeyInput" placeholder="Enter your Gemini API Key">
+                <button onclick="saveGeminiApiKey()">💾 Save Key</button>
+            </div>
+            <div id="apiStatus" class="api-status"></div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h4>📋 How to Use:</h4>
+            <ol>
+                <li><strong>Important:</strong> Get a Gemini API Key from Google AI Studio and save it above.</li>
+                <li>Upload an invoice image or use your camera to capture one.</li>
+                <li>If the image is sideways, use the rotate buttons to correct it.</li>
+                <li>Click "Process Invoice" and wait for the AI to extract the data.</li>
+                <li>Review and edit the extracted information if needed.</li>
+                <li>Export data locally as an Excel or JSON file, or push to Google Sheets.</li>
+            </ol>
+        </div>
+
+        <div class="main-content">
+            <!-- Left Column: Upload & Preview -->
+            <div class="section">
+                <h2>📤 Upload Invoice</h2>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <p>Drag & drop invoice image here</p>
+                    <p style="margin: 10px 0;">or</p>
+                    <div class="upload-buttons">
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                        <button class="btn" style="background-color: #667eea; color: white;" onclick="document.getElementById('fileInput').click()">
+                            📁 Choose File
+                        </button>
+                        <button class="btn" style="background-color: #764ba2; color: white;" onclick="openCamera()">
+                            📷 Use Camera
+                        </button>
+                    </div>
+                </div>
+
+                <div class="preview-container" id="previewContainer" style="display: none;">
+                    <h3>Preview:</h3>
+                    <canvas id="previewCanvas"></canvas>
+                    <div class="rotate-buttons">
+                        <button onclick="rotateImage(-90)">↺ Rotate Left</button>
+                        <button onclick="rotateImage(90)">↻ Rotate Right</button>
+                    </div>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill">0%</div>
+                    </div>
+                    <div class="status-message info" id="statusMessage"></div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="processBtn" onclick="processInvoice()" disabled>
+                        🔍 Process Invoice
+                    </button>
+                    <button class="btn btn-secondary" id="resetBtn" onclick="resetApp()" style="display: none;">
+                        🔄 Reset
+                    </button>
+                </div>
+
+                <!-- OCR Text Display -->
+                <div class="ocr-text-container" id="ocrTextContainer" style="display: none;">
+                    <h3>Raw OCR Text:</h3>
+                    <textarea id="ocrText" readonly></textarea>
+                </div>
+            </div>
+
+            <!-- Right Column: Extracted Data Form -->
+            <div class="section">
+                <h2>📊 Extracted Invoice Data</h2>
+                
+                <form id="invoiceForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="invoiceNumber">Invoice Number:</label>
+                        <input type="text" id="invoiceNumber" placeholder="e.g., INV-2024-001">
+                        <div class="error-message" id="invoiceNumberError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="invoiceDate">Date:</label>
+                        <input type="text" id="invoiceDate" placeholder="e.g., 2024-01-15">
+                        <div class="error-message" id="invoiceDateError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vendorName">Vendor / Company Name:</label>
+                        <input type="text" id="vendorName" placeholder="e.g., Acme Corporation">
+                        <div class="error-message" id="vendorNameError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="buyerName">Buyer / Customer Name:</label>
+                        <input type="text" id="buyerName" placeholder="e.g., John Doe">
+                        <div class="error-message" id="buyerNameError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="totalAmount">Total Amount:</label>
+                        <input type="text" id="totalAmount" placeholder="e.g., 1,234.56">
+                        <div class="error-message" id="totalAmountError"></div>
+                    </div>
+
+                    <!-- Line Items Section -->
+                    <div class="line-items-section">
+                        <h3>📦 Line Items</h3>
+                        <div class="table-container">
+                            <table id="lineItemsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Item Name</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Total</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lineItemsBody"></tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-add" onclick="addLineItem()">
+                            ➕ Add Line Item
+                        </button>
+                    </div>
+                    
+                    <!-- Export Options -->
+                    <div class="export-options-section">
+                        <h3>📤 Export & Save Data</h3>
+                        
+                        <!-- Excel Export Options -->
+                        <h4>📄 Export to File</h4>
+                        <div class="form-group">
+                            <label for="excelFileName">File Name:</label>
+                            <input type="text" id="excelFileName" placeholder="e.g., Invoice_Data">
+                        </div>
+                        <div class="form-group">
+                            <label for="excelSheetName">Sheet Name (for Excel):</label>
+                            <input type="text" id="excelSheetName" placeholder="e.g., Q4_Invoices">
+                        </div>
+                        <div class="action-buttons">
+                             <button type="button" class="btn btn-primary" onclick="exportToExcel()">
+                               📄 Export Excel
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="exportData()">
+                                💾 Export JSON
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Google Sheets Integration -->
+                    <div class="export-options-section">
+                        <h4>☁️ Push to Google Sheets</h4>
+                         <div class="form-group">
+                            <label for="googleApiKey">Google Cloud API Key (for Sheets):</label>
+                            <input type="text" id="googleApiKey" placeholder="Your Google Cloud API Key">
+                        </div>
+                         <div class="form-group">
+                            <label for="googleClientId">Google Client ID (for Sheets):</label>
+                            <input type="text" id="googleClientId" placeholder="Your Google Cloud OAuth Client ID">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="saveGoogleCreds()">Save Credentials</button>
+                        
+                        <div id="googleAuthControls" style="margin-top: 15px; display: none;">
+                            <button id="authorize_button" class="btn btn-primary" onclick="handleAuthClick()">Sign in with Google</button>
+                            <button id="signout_button" class="btn btn-secondary" onclick="handleSignoutClick()" style="display: none;">Sign Out</button>
+                            <div id="authStatus" class="google-auth-status signed-out">Not signed in.</div>
+                        </div>
+
+                        <div id="googleSheetControls" style="margin-top: 15px; display: none;">
+                            <div class="form-group">
+                                <label for="spreadsheetId">Spreadsheet ID:</label>
+                                <input type="text" id="spreadsheetId" placeholder="ID from your Google Sheet URL">
+                            </div>
+                            <div class="form-group">
+                                <label for="sheetName">Sheet Name:</label>
+                                <input type="text" id="sheetName" placeholder="e.g., Sheet1">
+                            </div>
+                             <button type="button" class="btn btn-primary" onclick="pushToGoogleSheet()" id="pushToSheetBtn">
+                                🚀 Push to Google Sheet
+                            </button>
+                        </div>
+                    </div>
+
+
+                    <div class="action-buttons">
+                        <button type="button" class="btn btn-secondary" onclick="validateForm()">
+                            ✅ Validate All Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera Modal (Hidden) -->
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleFileSelect(event)">
+    
+    <!-- Toast Notification Container -->
+    <div id="toastNotification" class="toast"></div>
+
+    <script>
+        // Global variables
+        let currentImage = new Image();
+        let ocrText = '';
+        let currentRotation = 0;
+        let geminiApiKey = '';
+        
+        // Google Sheets API variables
+        let gapiReady = false; 
+        let gisReady = false; 
+        let tokenClient;
+        let GOOGLE_API_KEY = '';
+        let GOOGLE_CLIENT_ID = '';
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Setup drag and drop
+            const uploadArea = document.getElementById('uploadArea');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    handleFile(file);
+                }
+            });
+            
+            // Load saved Gemini API key
+            const savedGeminiKey = localStorage.getItem('gemini_api_key');
+            if(savedGeminiKey) {
+                geminiApiKey = savedGeminiKey;
+                document.getElementById('geminiApiKeyInput').value = savedGeminiKey;
+                showApiStatus('Gemini API key loaded from storage.', 'success');
+            }
+            
+            // Load saved Google Sheets creds
+            GOOGLE_API_KEY = localStorage.getItem('googleApiKey');
+            GOOGLE_CLIENT_ID = localStorage.getItem('googleClientId');
+            if (GOOGLE_API_KEY && GOOGLE_CLIENT_ID) {
+                document.getElementById('googleApiKey').value = GOOGLE_API_KEY;
+                document.getElementById('googleClientId').value = GOOGLE_CLIENT_ID;
+                document.getElementById('googleAuthControls').style.display = 'block';
+            }
+        });
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toastEl = document.getElementById('toastNotification');
+            toastEl.textContent = message;
+            toastEl.className = `toast ${type} show`;
+            
+            setTimeout(() => {
+                toastEl.className = toastEl.className.replace('show', '');
+            }, 3000);
+        }
+
+        // --- Gemini API Key Handling ---
+        function saveGeminiApiKey() {
+            const keyInput = document.getElementById('geminiApiKeyInput');
+            const key = keyInput.value.trim();
+            if (key) {
+                geminiApiKey = key;
+                localStorage.setItem('gemini_api_key', key);
+                showApiStatus('Gemini API Key saved successfully! ✓', 'success');
+            } else {
+                showToast('Please enter a valid Gemini API key.', 'error');
+            }
+        }
+
+        function showApiStatus(message, type) {
+            const statusEl = document.getElementById('apiStatus');
+            statusEl.textContent = message;
+            statusEl.className = `api-status ${type}`;
+        }
+        
+        // --- Image Handling and Rotation ---
+        
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage.src = e.target.result;
+                currentImage.onload = () => {
+                    currentRotation = 0;
+                    drawImageWithRotation();
+                    document.getElementById('previewContainer').style.display = 'block';
+                    document.getElementById('processBtn').disabled = false;
+                    document.getElementById('resetBtn').style.display = 'inline-block';
+                    resetForm();
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function rotateImage(degrees) {
+            currentRotation = (currentRotation + degrees + 360) % 360;
+            drawImageWithRotation();
+        }
+
+        function drawImageWithRotation() {
+            const canvas = document.getElementById('previewCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const radians = currentRotation * Math.PI / 180;
+            const sin = Math.sin(radians);
+            const cos = Math.cos(radians);
+            
+            const newWidth = Math.abs(currentImage.width * cos) + Math.abs(currentImage.height * sin);
+            const newHeight = Math.abs(currentImage.height * cos) + Math.abs(currentImage.width * sin);
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            ctx.translate(newWidth / 2, newHeight / 2);
+            ctx.rotate(radians);
+            ctx.drawImage(currentImage, -currentImage.width / 2, -currentImage.height / 2);
+        }
+
+        // File selection handler
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        // Open camera
+        function openCamera() {
+            document.getElementById('cameraInput').click();
+        }
+
+        // Process invoice with OCR and AI
+        async function processInvoice() {
+            if (!geminiApiKey) {
+                showToast('Please save your Google Gemini API key first!', 'error');
+                return;
+            }
+            const canvas = document.getElementById('previewCanvas');
+            if (!canvas || !canvas.toDataURL || canvas.width === 0) {
+                 showToast('Please upload an invoice image first!', 'warning');
+                 return;
+            }
+
+            try {
+                const imageDataUrl = canvas.toDataURL('image/jpeg');
+
+                const progressContainer = document.getElementById('progressContainer');
+                progressContainer.style.display = 'block';
+                updateProgress(0, 'Initializing OCR...');
+
+                // Step 1: Perform OCR with Tesseract.js
+                updateProgress(10, 'Processing image with Tesseract OCR...');
+                
+                const result = await Tesseract.recognize(
+                    imageDataUrl,
+                    'eng',
+                    {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                const progress = Math.round(m.progress * 40);
+                                updateProgress(10 + progress, `OCR Progress: ${Math.round(m.progress * 100)}%`);
+                            }
+                        }
+                    }
+                );
+
+                ocrText = result.data.text;
+                console.log('OCR Text:', ocrText);
+
+                document.getElementById('ocrText').value = ocrText;
+                document.getElementById('ocrTextContainer').style.display = 'block';
+
+                updateProgress(50, `OCR complete! Sending to AI for parsing...`);
+
+                // Step 2: Parse the text with Gemini
+                const parsedData = await parseWithGemini(ocrText);
+                
+                updateProgress(90, 'Populating form with extracted data...');
+
+                // Step 3: Populate form with parsed data
+                populateForm(parsedData);
+
+                updateProgress(100, '✓ Invoice processed successfully!');
+                
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 2000);
+
+            } catch (error) {
+                console.error('Processing error:', error);
+                updateProgress(0, `Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Parse OCR text with Gemini
+        async function parseWithGemini(text) {
+            const systemPrompt = `You are an expert invoice parser. Extract all relevant information from the provided OCR text and return it as a single, minified JSON object.
+
+IMPORTANT: Your entire response must be ONLY the JSON object, with no markdown formatting (like \`\`\`json), no explanations, and no extra text.
+
+The required JSON structure is:
+{"invoiceNumber":"string or null","date":"YYYY-MM-DD format or null","vendorName":"string or null", "buyerName":"string or null", "totalAmount":number or null,"lineItems":[{"itemName":"string","quantity":number,"price":number,"total":number}]}
+
+Follow these rules precisely:
+1.  **Invoice Number**: Find the unique alphanumeric identifier near labels like "Invoice #", "Invoice No", "INV #", "Receipt No". It should be a distinct code, not a date, phone number, or tax ID (like GSTIN).
+2.  **Date**: Find the primary invoice date, often labeled "Date:", "Invoice Date:", or located near the invoice number. Prioritize this over "Due Date" or "Order Date". The final format must be YYYY-MM-DD. Be flexible with input separators like '/', '-', or spaces. For example, convert "07 / 10 / 2025" or "07 Oct 2025" to "2025-10-07".
+3.  **Vendor Name**: This is the company name selling the goods/services, usually at the top of the invoice.
+4.  **Buyer Name**: This is the customer's name, found under labels like "Bill To:", "Customer:", "Sold To:", or the name associated with the primary address block that is not the vendor's.
+5.  **Total Amount**: This is critical. The 'totalAmount' must be the final, grand total payable. Look for labels like "Grand Total", "Total Amount Due", "Net Payable", or "Total". If you see a subtotal and tax amounts (like GST, CGST, SGST), ensure the 'totalAmount' reflects the final sum of all these values. It must be the absolute final figure.
+6.  **Line Items**: Extract all line items with their name, quantity, unit price, and total for that line.
+7.  **Data Types**: All monetary values (totalAmount, price, total) must be numbers, not strings. Remove currency symbols and commas.
+8.  **Null Values**: If any piece of information cannot be found, the value in the JSON for that key must be null.`;
+
+            const userQuery = `Here is the OCR text from an invoice. Please parse it according to the rules.\n\nOCR Text:\n${text}`;
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+
+            const payload = {
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                contents: [{
+                    parts: [{ text: userQuery }]
+                }],
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Gemini API Error Response:', errorData);
+                    throw new Error(errorData.error?.message || 'Gemini API request failed');
+                }
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                    console.error('Invalid Gemini response structure:', result);
+                    throw new Error('Could not find generated text in the Gemini API response.');
+                }
+
+                let content = candidate.content.parts[0].text.trim();
+                console.log('Gemini Raw Response:', content);
+                content = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+
+                const parsed = JSON.parse(content);
+                return parsed;
+
+            } catch (error) {
+                console.error('Gemini parsing error:', error);
+                throw new Error(`Failed to parse invoice with Gemini: ${error.message}`);
+            }
+        }
+        
+        // --- Google Sheets Integration ---
+
+        function saveGoogleCreds() {
+            GOOGLE_API_KEY = document.getElementById('googleApiKey').value.trim();
+            GOOGLE_CLIENT_ID = document.getElementById('googleClientId').value.trim();
+            
+            if (GOOGLE_API_KEY && GOOGLE_CLIENT_ID) {
+                localStorage.setItem('googleApiKey', GOOGLE_API_KEY);
+                localStorage.setItem('googleClientId', GOOGLE_CLIENT_ID);
+                document.getElementById('googleAuthControls').style.display = 'block';
+                showToast('Credentials saved! You can now sign in.', 'success');
+            } else {
+                showToast('Please enter both Google Cloud API Key and Client ID', 'warning');
+            }
+        }
+
+        function gapiLoaded() {
+            gapi.load('client', () => {
+                gapiReady = true;
+            });
+        }
+
+        function gisLoaded() {
+            gisReady = true;
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: GOOGLE_API_KEY,
+                discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+            });
+        }
+
+        function initializeGisClient() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // This is set just before requesting a token
+            });
+        }
+        
+        async function handleAuthClick() {
+            if (!gapiReady || !gisReady) {
+                showToast('Google API scripts are still loading. Please wait a moment and try again.', 'warning');
+                return;
+            }
+
+            try {
+                await initializeGapiClient();
+                initializeGisClient();
+            } catch (err) {
+                console.error("Error initializing Google clients", err);
+                showToast(`Initialization Error: ${err.details || err.message || 'Unknown error'}`, 'error');
+                return;
+            }
+
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    console.error("Google Auth Error:", resp);
+                    showToast(`Auth Error: ${resp.error}. Check your Client ID and config.`, 'error');
+                    return;
+                }
+                document.getElementById('signout_button').style.display = 'block';
+                document.getElementById('authorize_button').innerText = 'Refresh Token';
+                document.getElementById('googleSheetControls').style.display = 'block';
+                
+                const authStatus = document.getElementById('authStatus');
+                authStatus.textContent = 'Successfully signed in!';
+                authStatus.className = 'google-auth-status signed-in';
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('authorize_button').innerText = 'Sign in with Google';
+                document.getElementById('signout_button').style.display = 'none';
+                document.getElementById('googleSheetControls').style.display = 'none';
+                
+                const authStatus = document.getElementById('authStatus');
+                authStatus.textContent = 'Signed out.';
+                authStatus.className = 'google-auth-status signed-out';
+            }
+        }
+        
+        async function pushToGoogleSheet() {
+            const spreadsheetId = document.getElementById('spreadsheetId').value.trim();
+            const sheetName = document.getElementById('sheetName').value.trim();
+
+            if (!spreadsheetId || !sheetName) {
+                showToast('Spreadsheet ID and Sheet Name are required', 'warning');
+                return;
+            }
+            if(!validateForm()) return;
+
+            const invoiceData = [
+                document.getElementById('invoiceNumber').value,
+                document.getElementById('invoiceDate').value,
+                document.getElementById('vendorName').value,
+                document.getElementById('buyerName').value,
+                parseFloat(document.getElementById('totalAmount').value.replace(/,/g, ''))
+            ];
+            
+            // Add a timestamp
+            invoiceData.push(new Date().toISOString());
+
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.append({
+                    spreadsheetId: spreadsheetId,
+                    range: sheetName,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: {
+                        values: [invoiceData],
+                    },
+                });
+                console.log(response);
+                showToast('Data successfully pushed to Google Sheet!', 'success');
+            } catch (err) {
+                console.error(err);
+                showToast(`Error: ${err.result.error.message}`, 'error');
+            }
+        }
+
+
+        // Populate form with parsed data
+        function populateForm(data) {
+            document.getElementById('invoiceNumber').value = data.invoiceNumber || '';
+            document.getElementById('invoiceDate').value = data.date || '';
+            document.getElementById('vendorName').value = data.vendorName || '';
+            document.getElementById('buyerName').value = data.buyerName || '';
+            document.getElementById('totalAmount').value = data.totalAmount || '';
+            
+            // Set default excel file name
+            if(data.invoiceNumber) {
+                document.getElementById('excelFileName').value = `Invoice_${data.invoiceNumber}`;
+            }
+
+            const tbody = document.getElementById('lineItemsBody');
+            tbody.innerHTML = '';
+
+            if (data.lineItems && data.lineItems.length > 0) {
+                data.lineItems.forEach(item => addLineItem(item));
+            } else {
+                addLineItem();
+            }
+        }
+
+        // Add line item row
+        function addLineItem(data = null) {
+            const tbody = document.getElementById('lineItemsBody');
+            const row = tbody.insertRow();
+            
+            row.innerHTML = `
+                <td><input type="text" class="item-name" value="${data?.itemName || ''}" oninput="calculateLineTotal(this)"></td>
+                <td><input type="number" class="item-quantity" value="${data?.quantity || ''}" step="any" oninput="calculateLineTotal(this)"></td>
+                <td><input type="number" class="item-price" value="${data?.price || ''}" step="any" oninput="calculateLineTotal(this)"></td>
+                <td><input type="number" class="item-total" value="${data?.total || ''}" step="any" readonly></td>
+                <td><button type="button" class="btn-remove" onclick="removeLineItem(this)">🗑️ Remove</button></td>
+            `;
+
+            if (data && data.quantity && data.price) {
+                const totalInput = row.querySelector('.item-total');
+                totalInput.value = (data.quantity * data.price).toFixed(2);
+            }
+        }
+
+        // Calculate line item total
+        function calculateLineTotal(input) {
+            const row = input.closest('tr');
+            const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
+            const price = parseFloat(row.querySelector('.item-price').value) || 0;
+            const totalInput = row.querySelector('.item-total');
+            totalInput.value = (quantity * price).toFixed(2);
+        }
+
+        // Remove line item
+        function removeLineItem(button) {
+            const row = button.closest('tr');
+            row.remove();
+        }
+
+        // Validate form
+        function validateForm() {
+            let isValid = true;
+            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+            document.querySelectorAll('input.error').forEach(el => el.classList.remove('error'));
+
+            if (!document.getElementById('invoiceNumber').value.trim()) {
+                showError('invoiceNumber', 'Invoice number is required');
+                isValid = false;
+            }
+
+            const dateValue = document.getElementById('invoiceDate').value.trim();
+            if (!dateValue) {
+                showError('invoiceDate', 'Date is required');
+                isValid = false;
+            } else if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                showError('invoiceDate', 'Invalid date format (use YYYY-MM-DD)');
+                isValid = false;
+            }
+
+            if (!document.getElementById('vendorName').value.trim()) {
+                showError('vendorName', 'Vendor name is required');
+                isValid = false;
+            }
+            
+            if (!document.getElementById('buyerName').value.trim()) {
+                showError('buyerName', 'Buyer name is required');
+                isValid = false;
+            }
+
+            const totalAmount = document.getElementById('totalAmount').value.trim();
+            if (!totalAmount || isNaN(parseFloat(totalAmount.replace(/,/g, '')))) {
+                showError('totalAmount', 'Total amount is required and must be a number');
+                isValid = false;
+            }
+
+            if (isValid) {
+                showToast('✓ All data validated successfully!', 'success');
+            } else {
+                showToast('⚠️ Please fix the validation errors', 'error');
+            }
+            return isValid;
+        }
+
+        // Show validation error
+        function showError(fieldId, message) {
+            document.getElementById(fieldId).classList.add('error');
+            document.getElementById(fieldId + 'Error').textContent = message;
+        }
+
+        // Export data to Excel
+        function exportToExcel() {
+            if (!validateForm()) return;
+            
+            const invoiceNumber = document.getElementById('invoiceNumber').value;
+            const invoiceData = {
+                date: document.getElementById('invoiceDate').value,
+                vendorName: document.getElementById('vendorName').value,
+                buyerName: document.getElementById('buyerName').value,
+                totalAmount: parseFloat(document.getElementById('totalAmount').value.replace(/,/g, '')),
+            };
+
+            const lineItems = [];
+            document.querySelectorAll('#lineItemsBody tr').forEach(row => {
+                const item = {
+                    "Item Name": row.querySelector('.item-name').value,
+                    "Quantity": parseFloat(row.querySelector('.item-quantity').value) || 0,
+                    "Price": parseFloat(row.querySelector('.item-price').value) || 0,
+                    "Total": parseFloat(row.querySelector('.item-total').value) || 0
+                };
+                if (item["Item Name"]) lineItems.push(item);
+            });
+
+            const summaryData = [
+                ["Invoice Summary"],
+                [],
+                ["Invoice Number", invoiceNumber],
+                ["Date", invoiceData.date],
+                ["Vendor Name", invoiceData.vendorName],
+                ["Buyer Name", invoiceData.buyerName],
+                ["Total Amount", invoiceData.totalAmount]
+            ];
+            const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+            wsSummary['!cols'] = [{ wch: 20 }, { wch: 30 }];
+
+            const wsLineItems = XLSX.utils.json_to_sheet(lineItems);
+            wsLineItems['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
+
+            const wb = XLSX.utils.book_new();
+            const summarySheetName = document.getElementById('excelSheetName').value.trim() || 'Invoice Summary';
+            const lineItemsSheetName = `${summarySheetName}_Items`;
+
+            XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
+            XLSX.utils.book_append_sheet(wb, wsLineItems, lineItemsSheetName);
+            
+            const fileNameInput = document.getElementById('excelFileName').value.trim();
+            const fileName = `${fileNameInput || 'Invoice_' + (invoiceNumber || 'export')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            showToast('✓ Invoice data exported to Excel!', 'success');
+        }
+
+        // Export data as JSON
+        function exportData() {
+            if (!validateForm()) return;
+            
+            const data = {
+                invoiceNumber: document.getElementById('invoiceNumber').value,
+                date: document.getElementById('invoiceDate').value,
+                vendorName: document.getElementById('vendorName').value,
+                buyerName: document.getElementById('buyerName').value,
+                totalAmount: parseFloat(document.getElementById('totalAmount').value.replace(/,/g, '')),
+                lineItems: [],
+                ocrText: ocrText
+            };
+
+            document.querySelectorAll('#lineItemsBody tr').forEach(row => {
+                const item = {
+                    itemName: row.querySelector('.item-name').value,
+                    quantity: parseFloat(row.querySelector('.item-quantity').value) || 0,
+                    price: parseFloat(row.querySelector('.item-price').value) || 0,
+                    total: parseFloat(row.querySelector('.item-total').value) || 0
+                };
+                if (item.itemName) data.lineItems.push(item);
+            });
+
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `invoice_${data.invoiceNumber || 'export'}_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('✓ Invoice data exported successfully!', 'success');
+        }
+
+        // Update progress bar
+        function updateProgress(percent, message, type = 'info') {
+            const progressFill = document.getElementById('progressFill');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = percent + '%';
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+        }
+
+        // Reset form
+        function resetForm() {
+            document.getElementById('invoiceForm').reset();
+            document.getElementById('lineItemsBody').innerHTML = '';
+            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+            document.querySelectorAll('input.error').forEach(el => el.classList.remove('error'));
+            document.getElementById('ocrTextContainer').style.display = 'none';
+            ocrText = '';
+        }
+
+        // Reset entire app
+        function resetApp() {
+            currentImage.src = '';
+            const canvas = document.getElementById('previewCanvas');
+            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+            resetForm();
+            document.getElementById('previewContainer').style.display = 'none';
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('resetBtn').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('cameraInput').value = '';
+        }
+    </script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+</html>
+
