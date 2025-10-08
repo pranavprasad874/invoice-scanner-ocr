@@ -901,7 +901,7 @@
 
         // Parse OCR text with Gemini
         async function parseWithGemini(text) {
-            const systemPrompt = `You are an expert invoice parser. Extract all relevant information from the provided OCR text and return it as a single, minified JSON object.
+            const systemPrompt = `You are an expert invoice parser. Extract all relevant information from the provided OCR text and return it as a single, minified JSON object. Treat documents titled "Payment Voucher", "Receipt", or "Bill" as valid invoices for data extraction.
 
 IMPORTANT: Your entire response must be ONLY the JSON object, with no markdown formatting (like \`\`\`json), no explanations, and no extra text.
 
@@ -909,16 +909,16 @@ The required JSON structure is:
 {"invoiceNumber":"string or null","date":"YYYY-MM-DD format or null","vendorName":"string or null", "buyerName":"string or null", "totalAmount":number or null,"lineItems":[{"itemName":"string","quantity":number,"price":number,"total":number}]}
 
 Follow these rules precisely:
-1.  **Invoice Number**: Find the unique alphanumeric identifier near labels like "Invoice #", "Invoice No", "INV #", "Receipt No". It should be a distinct code, not a date, phone number, or tax ID (like GSTIN).
-2.  **Date**: Find the primary invoice date, often labeled "Date:", "Invoice Date:", or located near the invoice number. Prioritize this over "Due Date" or "Order Date". The final format must be YYYY-MM-DD. Be flexible with input separators like '/', '-', or spaces. For example, convert "07 / 10 / 2025" or "07 Oct 2025" to "2025-10-07".
+1.  **Invoice Number**: Find the unique identifier. Look for labels like "Invoice No.", "INV #", "Receipt No.", "Voucher No.", or simply "No.". It should be a distinct code, not a date, phone number, or tax ID.
+2.  **Date**: Find the primary invoice date, often labeled "Date:", "Invoice Date:", or located near the invoice number. Prioritize this over "Due Date" or "Order Date". The final format must be YYYY-MM-DD. Be flexible with input formats.
 3.  **Vendor Name**: This is the company name selling the goods/services, usually at the top of the invoice.
-4.  **Buyer Name**: This is the customer's name, found under labels like "Bill To:", "Customer:", "Sold To:", or the name associated with the primary address block that is not the vendor's.
-5.  **Total Amount**: This is critical. The 'totalAmount' must be the final, grand total payable. Look for labels like "Grand Total", "Total Amount Due", "Net Payable", or "Total". If you see a subtotal and tax amounts (like GST, CGST, SGST), ensure the 'totalAmount' reflects the final sum of all these values. It must be the absolute final figure.
-6.  **Line Items**: Extract all line items with their name, quantity, unit price, and total for that line.
-7.  **Data Types**: All monetary values (totalAmount, price, total) must be numbers, not strings. Remove currency symbols and commas.
+4.  **Buyer Name**: This is the customer's name, found under labels like "Bill To:", "Customer:", "Sold To:". If no buyer/customer is explicitly mentioned (e.g., on a payment voucher), return null.
+5.  **Total Amount**: This is critical. The 'totalAmount' must be the final, grand total payable. Look for labels like "Grand Total", "Total Amount Due", "Net Payable", or "Total". If you see a subtotal and tax amounts, ensure 'totalAmount' reflects the final sum.
+6.  **Line Items**: Extract all line items with name, quantity, unit price, and total. If there are no clear line items (e.g., on a simple payment voucher with a single expense description), return an empty array [] for the "lineItems" key.
+7.  **Data Types**: All monetary values must be numbers, not strings. Remove currency symbols and commas.
 8.  **Null Values**: If any piece of information cannot be found, the value in the JSON for that key must be null.`;
 
-            const userQuery = `Here is the OCR text from an invoice. Please parse it according to the rules.\n\nOCR Text:\n${text}`;
+            const userQuery = `Here is the OCR text from a document. Please parse it according to the rules.\n\nOCR Text:\n${text}`;
 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
 
@@ -1180,8 +1180,7 @@ Follow these rules precisely:
             }
             
             if (!document.getElementById('buyerName').value.trim()) {
-                showError('buyerName', 'Buyer name is required');
-                isValid = false;
+                // Buyer name is now optional for vouchers
             }
 
             const totalAmount = document.getElementById('totalAmount').value.trim();
@@ -1239,15 +1238,17 @@ Follow these rules precisely:
             const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
             wsSummary['!cols'] = [{ wch: 20 }, { wch: 30 }];
 
-            const wsLineItems = XLSX.utils.json_to_sheet(lineItems);
-            wsLineItems['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
-
             const wb = XLSX.utils.book_new();
             const summarySheetName = document.getElementById('excelSheetName').value.trim() || 'Invoice Summary';
-            const lineItemsSheetName = `${summarySheetName}_Items`;
-
+            
             XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
-            XLSX.utils.book_append_sheet(wb, wsLineItems, lineItemsSheetName);
+
+            if (lineItems.length > 0) {
+                 const wsLineItems = XLSX.utils.json_to_sheet(lineItems);
+                wsLineItems['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 15 }, { wch: 15 }];
+                const lineItemsSheetName = `${summarySheetName}_Items`;
+                XLSX.utils.book_append_sheet(wb, wsLineItems, lineItemsSheetName);
+            }
             
             const fileNameInput = document.getElementById('excelFileName').value.trim();
             const fileName = `${fileNameInput || 'Invoice_' + (invoiceNumber || 'export')}.xlsx`;
